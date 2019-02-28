@@ -171,6 +171,13 @@ def write_firings_file(channels,times,labels,fname):
     X[2,:]=labels
     mdaio.writemda64(X,fname)
 
+def write_detected_file(channels,times,fname):
+    L=len(channels)
+    X=np.zeros((2,L),dtype='float64')
+    X[0,:]=channels
+    X[1,:]=times
+    mdaio.writemda64(X,fname)
+
 def detect_on_neighborhood_from_timeseries_model(X,*,channel,nbhd_channels,detect_threshold,detect_sign,detect_interval,margin,chunk_infos):
     N=X.numTimepoints()
     channel_rel=np.where(nbhd_channels==channel)[0][0] # The relative index of the central channel in the neighborhood
@@ -626,6 +633,30 @@ class MountainSort4:
                 inds_m_m2=np.where(channel_assignments_m==m2)[0]
                 if len(inds_m_m2)>0:
                     neighborhood_sorters[m2].addAssignedEventTimes(times_m[inds_m_m2])
+
+        print ('Saving phase1 events...'); sys.stdout.flush()
+        phase1_times_dict={}
+        for m in range(M):
+            phase1_times_dict[m]=[]
+        for m in range(M):
+            times_m=neighborhood_sorters[m].getPhase1Times()
+            channel_assignments_m=neighborhood_sorters[m].getPhase1ChannelAssignments()
+            for m2 in range(M):
+                inds_m_m2=np.where(channel_assignments_m==m2)[0]
+                if len(inds_m_m2)>0:
+                    phase1_times_dict[m2].append(times_m[inds_m_m2])
+        for m in range(M):
+            phase1_times_dict[m]=np.unique(np.concatenate(phase1_times_dict[m]))
+        phase1_times_list=[]
+        phase1_channels_list=[]
+        for m in range(M):
+            phase1_times_list.append(phase1_times_dict[m])
+            phase1_channels_list.append(np.ones(len(phase1_times_dict[m]))*(m+1))
+        phase1_times=np.concatenate(phase1_times_list)
+        phase1_channels=np.concatenate(phase1_channels_list)
+
+        print ('Writing detected file...'); sys.stdout.flush()
+        write_detected_file(phase1_channels,phase1_times,'output/detected.mda')
 
         pool = multiprocessing.Pool(num_workers)
         pool.map(run_phase2_sort, neighborhood_sorters) 
